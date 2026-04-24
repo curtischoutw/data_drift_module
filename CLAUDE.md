@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a **Data Drift Detection System** (資料漂移偵測系統) - a comprehensive Python-based toolkit for detecting and analyzing statistical drift in datasets. It's primarily used for monitoring machine learning model inputs in production environments.
+This is a **Data Drift Detection System** (資料漂移偵測系統) - a Python package for detecting and analyzing statistical drift in datasets. It's primarily used for monitoring machine learning model inputs in production environments.
 
 **Purpose**: Detect when the statistical properties of production data deviate significantly from training/reference data, which can indicate model degradation or data quality issues.
 
@@ -13,155 +13,102 @@ This is a **Data Drift Detection System** (資料漂移偵測系統) - a compreh
 ## Repository Structure
 
 ```
-data_drift_module/
-├── dependencies/              # Core modules (basic implementation)
-│   ├── __init__.py           # Package initialization - exports DataDriftDetector and DriftVisualizer
-│   ├── data_drift_detector.py    # Basic drift detector with KS, Chi-Square, PSI, Wasserstein
-│   └── drift_visualizer.py       # Basic visualization tools
+data_drift_module/                    ← git repo root
+├── pyproject.toml                    # 套件定義，pip install -e . 可安裝
+├── .gitignore
+├── CLAUDE.md                         # 此文件
 │
-├── files/                    # Improved/enhanced implementations
-│   ├── improved_data_drift_detector.py  # Enhanced detector with additional tests
-│   ├── improved_drift_visualizer.py     # Enhanced visualizer with more charts
-│   ├── drift_config.py                  # Configuration management system
-│   ├── quick_start_improved.py          # Comprehensive quick start script
-│   └── quick_start_simple.py            # Simple quick start example
+├── data_drift_module/                ← 可安裝的 Python 套件（flat layout）
+│   ├── __init__.py                   # 公共 API
+│   ├── detector.py                   # DataDriftDetector 偵測器
+│   ├── visualizer.py                 # DriftVisualizer 視覺化
+│   └── config.py                     # DriftDetectionConfig, ConfigSelector
 │
-├── script/                   # Usage examples and scripts
-│   ├── quick_start.py        # Main quick start script
-│   ├── quick_start_drift.ipynb          # Jupyter notebook - drift testing
-│   └── quick_start_nonfrift.ipynb       # Jupyter notebook - no-drift testing
-│
-├── .gitognore                # Git ignore file (NOTE: filename has typo)
-└── CLAUDE.md                 # This file
+└── examples/                         # 使用範例
+    ├── quick_start.py                # 完整快速入門腳本
+    └── notebooks/
+        ├── quick_start_drift.ipynb   # Jupyter notebook - 漂移測試
+        └── quick_start_nondrift.ipynb # Jupyter notebook - 無漂移測試
+```
+
+---
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+安裝後即可標準 import：
+
+```python
+from data_drift_module import DataDriftDetector, DriftVisualizer
+from data_drift_module.config import DriftDetectionConfig, ConfigSelector
 ```
 
 ---
 
 ## Core Components
 
-### 1. DataDriftDetector (Basic - `dependencies/data_drift_detector.py`)
+### 1. DataDriftDetector (`data_drift_module/detector.py`)
 
-**Purpose**: Detect drift using fundamental statistical tests
+**Purpose**: 統一的漂移偵測器，合併了原有的基礎版與進階版
 
 **Key Methods**:
-- `__init__(reference_data, threshold=0.05)` - Initialize with baseline data
-- `detect_drift(current_data)` - Run drift detection on new data
-- `generate_report(output_format='text'|'markdown')` - Generate reports
-- `get_drifted_features()` - Get list of features with detected drift
+- `__init__(reference_data, threshold=0.05, psi_threshold=0.2, jsd_threshold=0.1, min_sample_size=30, enable_mann_whitney=False, enable_anderson_darling=False)` - 初始化
+- `detect_drift(current_data)` - 執行漂移偵測
+- `generate_report(output_format='text'|'markdown')` - 生成報告
+- `get_drifted_features()` - 取得漂移特徵列表
 
 **Supported Tests**:
-- **Numerical Features**:
-  - Kolmogorov-Smirnov (KS) Test - distribution comparison
-  - Wasserstein Distance - distance between distributions
-  - Population Stability Index (PSI) - shift measurement
-- **Categorical Features**:
-  - Chi-Square Test - independence test
-  - PSI for categorical - category distribution shift
 
-**Configuration**:
-- `threshold` (float): Significance level for statistical tests (default: 0.05)
+| 特徵類型 | 方法 | 角色 | 說明 |
+|---------|------|------|------|
+| 數值型 | KS Test | 主力 | 分布比較，非參數 |
+| 數值型 | PSI | 主力 | 業界金融標準，可量化漂移程度 |
+| 數值型 | JSD | 主力 | 有界 [0,1]，與 KS 互補 |
+| 數值型 | Wasserstein Distance | 輔助 | 只記錄，不觸發漂移判定 |
+| 數值型 | Mann-Whitney U | 可選 | `enable_mann_whitney=True` 啟用 |
+| 數值型 | Anderson-Darling | 可選 | `enable_anderson_darling=True` 啟用 |
+| 類別型 | Chi-Square Test | 主力 | 類別分布比較 |
+| 類別型 | PSI（類別版） | 主力 | 類別比例偏移量化 |
+| 類別型 | 新/消失類別偵測 | 主力 | 語義最清晰且零計算成本 |
+| 附加 | 缺失值漂移 | 附加 | Z-test for proportions |
+| 附加 | 樣本大小驗證 | 附加 | 不足時發出警告 |
 
-### 2. ImprovedDataDriftDetector (Enhanced - `files/improved_data_drift_detector.py`)
+### 2. DriftVisualizer (`data_drift_module/visualizer.py`)
 
-**Purpose**: Advanced drift detection with additional metrics and validations
+**Purpose**: 漂移視覺化工具
 
-**Additional Features**:
-- Missing value drift detection
-- Sample size validation
-- More statistical tests
-- Improved PSI calculation with better stability
-
-**Additional Tests**:
-- **Numerical**:
-  - Jensen-Shannon Divergence (JSD)
-  - Mann-Whitney U Test
-  - Anderson-Darling Test (reference only)
-- **Categorical**:
-  - Total Variation Distance (TVD)
-  - Hellinger Distance
-  - New/disappeared category detection
-
-**Configuration Parameters**:
-- `threshold` (float): Significance level (default: 0.05)
-- `min_sample_size` (int): Minimum samples required (default: 30)
-- `psi_threshold` (float): PSI drift threshold (default: 0.2)
-
-**New in Results**:
-- `missing_analysis`: Missing value drift information
-- `sample_check`: Sample size validation
-- `drift_reasons`: List of which tests detected drift
-
-### 3. DriftVisualizer (Basic - `dependencies/drift_visualizer.py`)
-
-**Purpose**: Create visualizations for drift analysis
+**Constructor**: `DriftVisualizer(detector, current_data)` — 必須同時傳入兩個參數
 
 **Key Methods**:
-- `plot_drift_summary()` - Overview charts
-- `plot_numerical_drift(feature_name)` - Numerical feature analysis
-- `plot_categorical_drift(feature_name)` - Categorical feature analysis
-- `plot_psi_heatmap()` - PSI values across features
-- `plot_all_drifts(save_dir)` - Generate all visualizations
+- `plot_drift_summary()` — 圓餅圖 + 特徵狀態條形圖 + 嚴重程度
+- `plot_numerical_drift(feature_name)` — 數值型特徵完整分析（直方圖、箱型圖、Q-Q、CDF、統計量）
+- `plot_categorical_drift(feature_name)` — 類別型特徵完整分析（條形圖、差異圖、圓餅圖）
+- `plot_metrics_comparison()` — 多指標比較儀表板（PSI、漂移原因、類型分析、缺失值）
+- `plot_all_drifts(save_dir)` — 生成所有圖表
 
-**Chart Types**:
-- Pie charts (drift ratios)
-- Bar charts (feature-wise drift status)
-- Histograms (distribution comparison)
-- Box plots (statistical comparison)
-
-### 4. ImprovedDriftVisualizer (Enhanced - `files/improved_drift_visualizer.py`)
-
-**Purpose**: Advanced visualizations with more comprehensive charts
-
-**Important**: Requires `current_data` parameter in constructor (fixed from basic version)
-
-```python
-visualizer = ImprovedDriftVisualizer(detector, current_data)
-```
-
-**Additional Visualizations**:
-- Q-Q plots for distribution comparison
-- CDF (Cumulative Distribution Function) plots
-- Drift severity indicators
-- Missing value change charts
-- Multi-metric comparison dashboard
-- Drift reason distribution
-
-**New Methods**:
-- `plot_metrics_comparison()` - Compare all metrics across features
-- Enhanced numerical/categorical drift plots with more subplots
-
-### 5. Configuration System (`files/drift_config.py`)
-
-**Purpose**: Centralized configuration management
+### 3. Configuration System (`data_drift_module/config.py`)
 
 **Key Classes**:
 
 #### DriftDetectionConfig
-Static configuration class with predefined thresholds
+靜態配置類別，包含預設閾值常數
 
 **Configuration Methods**:
-- `get_default_config()` - Standard settings
-- `get_strict_config()` - More sensitive to drift
-- `get_loose_config()` - Less sensitive to drift
-- `get_production_config()` - Recommended for production
-
-**Key Thresholds**:
-```python
-SIGNIFICANCE_LEVEL = 0.05           # p-value threshold
-PSI_THRESHOLD_DEFAULT = 0.2         # PSI drift threshold
-JSD_THRESHOLD_MODERATE = 0.1        # JSD threshold
-TVD_THRESHOLD_MODERATE = 0.2        # TVD threshold
-HELLINGER_THRESHOLD_MODERATE = 0.2  # Hellinger threshold
-MIN_SAMPLE_SIZE = 30                # Minimum samples
-```
+- `get_default_config()` — 標準設定
+- `get_strict_config()` — 更敏感（較易偵測到漂移）
+- `get_loose_config()` — 較寬鬆
+- `get_production_config()` — 生產環境推薦設定
 
 #### ConfigSelector
-Utility for selecting configurations based on scenario or data size
+```python
+config = ConfigSelector.select_by_scenario('production')
+# 可選 scenario: 'development', 'production', 'monitoring', 'research', 'strict', 'loose'
 
-**Methods**:
-- `select_by_scenario(scenario)` - Choose config by use case
-  - Available scenarios: 'development', 'production', 'monitoring', 'research', 'strict', 'loose'
-- `select_by_data_size(n_samples)` - Adjust config based on sample size
+config = ConfigSelector.select_by_data_size(n_samples)
+```
 
 ---
 
@@ -170,56 +117,37 @@ Utility for selecting configurations based on scenario or data size
 ### Numerical Feature Tests
 
 1. **Kolmogorov-Smirnov (KS) Test**
-   - Measures maximum distance between CDFs
-   - Returns p-value (< threshold = drift detected)
-   - Non-parametric, no distribution assumptions
+   - 比較 CDF 的最大距離，返回 p-value（< threshold = 漂移）
+   - 非參數，無分布假設
 
-2. **Wasserstein Distance**
-   - Measures "earth mover's distance" between distributions
-   - Higher values indicate more difference
-   - Interpretable in original data units
+2. **PSI (Population Stability Index)**
+   - 業界金融標準：< 0.1（穩定）、0.1-0.2（輕微）、> 0.2（顯著漂移）
+   - 使用分位數分箱 + epsilon 平滑確保穩定性
 
-3. **Population Stability Index (PSI)**
-   - Industry-standard metric for distribution shift
-   - Thresholds: < 0.1 (stable), 0.1-0.2 (slight change), > 0.2 (significant drift)
-   - Formula: PSI = Σ(actual% - expected%) × ln(actual% / expected%)
+3. **Jensen-Shannon Divergence (JSD)**
+   - 有界 [0, 1]，對稱，基於 KL Divergence
+   - 預設閾值 0.1，可透過 `jsd_threshold` 調整
 
-4. **Jensen-Shannon Divergence (JSD)**
-   - Symmetric measure of distribution similarity
-   - Range: [0, 1], where 0 = identical distributions
-   - Based on KL divergence but symmetric and bounded
+4. **Wasserstein Distance** *(輔助)*
+   - 只記錄於 tests 結果中，不影響 `has_drift` 判定
+   - 相對於資料範圍解釋
 
-5. **Mann-Whitney U Test**
-   - Non-parametric test for distribution differences
-   - Tests if distributions have same median
-   - Returns p-value like KS test
+5. **Mann-Whitney U Test** *(可選，預設關閉)*
+   - 非參數中位數差異檢定，`enable_mann_whitney=True` 啟用
+
+6. **Anderson-Darling Test** *(可選，預設關閉)*
+   - `enable_anderson_darling=True` 啟用
 
 ### Categorical Feature Tests
 
-1. **Chi-Square Test**
-   - Tests independence of categorical distributions
-   - Returns p-value (< threshold = drift detected)
-   - Requires sufficient samples in each category
-
-2. **Total Variation Distance (TVD)**
-   - Measures maximum probability difference
-   - Formula: TVD = 0.5 × Σ|P(x) - Q(x)|
-   - Range: [0, 1]
-
-3. **Hellinger Distance**
-   - Based on Bhattacharyya coefficient
-   - Symmetric measure of overlap
-   - Range: [0, 1], 0 = identical distributions
-
-4. **PSI for Categorical**
-   - Same formula as numerical but applied to category proportions
-   - Detects changes in category distributions
+1. **Chi-Square Test** — 類別分布獨立性檢定，返回 p-value
+2. **PSI for Categorical** — 與數值型相同公式，套用類別比例
+3. **新/消失類別偵測** — 直接比較兩資料集的類別集合
 
 ### Missing Value Detection
 
-- Z-test for proportions to detect significant changes in missing rates
-- Pooled proportion method for standard error calculation
-- Reports both absolute change and statistical significance
+- Z-test for proportions 比較缺失率差異
+- 同時滿足「p < threshold」且「缺失率差異 > 5%」才判定為漂移
 
 ---
 
@@ -227,87 +155,43 @@ Utility for selecting configurations based on scenario or data size
 
 ### Typical Usage Pattern
 
-1. **Load Data**
-   ```python
-   import pandas as pd
-   reference_data = pd.read_csv('training_data.csv')
-   current_data = pd.read_csv('production_data.csv')
-   ```
+```python
+import pandas as pd
+from data_drift_module import DataDriftDetector, DriftVisualizer
+from data_drift_module.config import ConfigSelector
 
-2. **Preprocess** (optional)
-   ```python
-   # Remove irrelevant columns
-   columns_to_drop = ['id', 'timestamp', 'user_id']
-   reference_data = reference_data.drop(columns=columns_to_drop)
-   current_data = current_data.drop(columns=columns_to_drop)
-   ```
+# 1. 載入資料
+reference_data = pd.read_csv('data/training_data.csv')
+current_data = pd.read_csv('data/production_data.csv')
 
-3. **Choose Implementation**
-   - Use `dependencies/` modules for basic, fast detection
-   - Use `files/improved_*` modules for comprehensive analysis
+# 2. 選擇配置
+config = ConfigSelector.select_by_scenario('production')
 
-4. **Configure Detection**
-   ```python
-   from drift_config import ConfigSelector
-   config = ConfigSelector.select_by_scenario('production')
-   ```
+# 3. 執行偵測
+detector = DataDriftDetector(
+    reference_data=reference_data,
+    threshold=config['significance_level'],
+    psi_threshold=config['psi_threshold'],
+    jsd_threshold=config['jsd_threshold'],
+    min_sample_size=config['min_sample_size']
+)
+results = detector.detect_drift(current_data)
 
-5. **Run Detection**
-   ```python
-   from improved_data_drift_detector import ImprovedDataDriftDetector
+# 4. 查看結果
+print(results['summary'])
+drifted = detector.get_drifted_features()
 
-   detector = ImprovedDataDriftDetector(
-       reference_data=reference_data,
-       threshold=config['significance_level'],
-       min_sample_size=config['min_sample_size'],
-       psi_threshold=config['psi_threshold']
-   )
+# 5. 生成報告
+print(detector.generate_report('text'))
+print(detector.generate_report('markdown'))
 
-   results = detector.detect_drift(current_data)
-   ```
-
-6. **Analyze Results**
-   ```python
-   # Check summary
-   print(results['summary'])
-
-   # Get drifted features
-   drifted = detector.get_drifted_features()
-
-   # Generate reports
-   text_report = detector.generate_report('text')
-   md_report = detector.generate_report('markdown')
-   ```
-
-7. **Visualize** (optional)
-   ```python
-   from improved_drift_visualizer import ImprovedDriftVisualizer
-
-   viz = ImprovedDriftVisualizer(detector, current_data)
-   viz.plot_drift_summary()
-   viz.plot_metrics_comparison()
-
-   # Individual feature analysis
-   for feature in drifted:
-       viz.plot_numerical_drift(feature)
-   ```
-
-### Quick Start Scripts
-
-Two quick start options provided:
-
-1. **Simple** (`files/quick_start_simple.py`)
-   - Uses basic detector
-   - Minimal configuration
-   - ~200 lines, easy to understand
-   - Good for learning/prototyping
-
-2. **Improved** (`files/quick_start_improved.py`)
-   - Uses enhanced detector and visualizer
-   - Comprehensive analysis pipeline
-   - ~515 lines with detailed reporting
-   - Production-ready with decision logic
-   - Includes 12 steps: data loading → visualization → decision recommendations
+# 6. 視覺化
+viz = DriftVisualizer(detector, current_data)
+viz.plot_drift_summary()
+viz.plot_metrics_comparison()
+for feature in drifted:
+    viz.plot_numerical_drift(feature)   # 或 plot_categorical_drift
+```
 
 ---
 
@@ -316,34 +200,32 @@ Two quick start options provided:
 ### Code Style
 
 1. **Language**:
-   - All function/class names in English
-   - All variable names in English
-   - Comments and docstrings in Chinese (Traditional)
-   - User-facing messages in Chinese
+   - 函式/類別名稱：English
+   - 變數名稱：English
+   - 註解/docstring：Traditional Chinese
+   - 使用者訊息：Chinese
 
 2. **Naming**:
-   - Classes: PascalCase (e.g., `DataDriftDetector`)
-   - Methods/functions: snake_case (e.g., `detect_drift`)
-   - Private methods: leading underscore (e.g., `_detect_feature_drift`)
-   - Constants: UPPER_SNAKE_CASE (e.g., `PSI_THRESHOLD_DEFAULT`)
+   - Classes: PascalCase (`DataDriftDetector`)
+   - Methods/functions: snake_case (`detect_drift`)
+   - Private methods: leading underscore (`_detect_feature_drift`)
+   - Constants: UPPER_SNAKE_CASE (`PSI_THRESHOLD_DEFAULT`)
 
-3. **Docstrings**:
-   - Chinese-language docstrings with English parameter names
-   - Format:
-     ```python
-     """
-     簡短描述
+3. **Docstrings**: Chinese，格式如下：
+   ```python
+   """
+   簡短描述
 
-     Parameters:
-     -----------
-     param_name : type
-         參數說明
+   Parameters:
+   -----------
+   param_name : type
+       參數說明
 
-     Returns:
-     --------
-     type : 說明
-     """
-     ```
+   Returns:
+   --------
+   type : 說明
+   """
+   ```
 
 ### Data Structure Conventions
 
@@ -355,120 +237,26 @@ Two quick start options provided:
         'total_features': int,
         'drifted_features': int,
         'drift_percentage': float,
-        'warnings': list  # Only in ImprovedDataDriftDetector
+        'warnings': list
     },
     'feature_results': {
         'feature_name': {
             'feature_name': str,
             'feature_type': 'numerical' | 'categorical',
             'has_drift': bool,
-            'drift_reasons': list,  # Only in improved version
+            'drift_reasons': list,   # e.g. ['ks_test', 'psi', 'jsd']
             'tests': {
-                # Test-specific results
-                'ks_test': {'statistic': float, 'p_value': float, 'interpretation': str},
-                'psi': {'value': float, 'interpretation': str},
-                # ... more tests
+                # 數值型: ks_test, psi, jensen_shannon_divergence, wasserstein_distance
+                #   可選: mann_whitney, anderson_darling
+                # 類別型: chi_square_test, psi
             },
-            'statistics': {
-                'reference': {...},
-                'current': {...}
-            },
-            'missing_analysis': {...},  # Only in improved version
-            'sample_check': {...}       # Only in improved version
+            'statistics': {...},
+            'missing_analysis': {...},
+            'sample_check': {...}
         }
     }
 }
 ```
-
-### File Organization
-
-- **Core logic**: `dependencies/` - stable, well-tested implementations
-- **Experimental/Enhanced**: `files/` - newer features, improvements
-- **Examples**: `script/` - usage demonstrations
-- **Outputs**: Not committed (in .gitignore as `output/`, `data/`)
-
-### Testing Approach
-
-Testing done via Jupyter notebooks in `script/`:
-- `quick_start_drift.ipynb` - Tests with known drift data
-- `quick_start_nonfrift.ipynb` - Tests with stable data
-
----
-
-## Environment Setup
-
-### Dependencies
-
-Required Python packages (inferred from imports):
-```
-pandas
-numpy
-scipy
-matplotlib
-seaborn
-python-dotenv
-```
-
-### Configuration via .env
-
-Scripts expect `.env` file with:
-```
-proj_path=/path/to/data_drift_module
-```
-
-Used in quick start scripts:
-```python
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv())
-import os
-proj_path = os.getenv('proj_path')
-```
-
-### Data Expectations
-
-Scripts expect data in `data/` directory (gitignored):
-- `training_data.csv` - Reference/baseline data
-- `production_data_with_drift.csv` - Test data with drift
-- `production_data_no_drift.csv` - Test data without drift
-
----
-
-## Known Issues and Gotchas
-
-### 1. Gitignore Filename Typo
-
-**Issue**: The gitignore file is named `.gitognore` (typo: missing 'i')
-**Impact**: File is not being used by Git
-**Location**: `/home/user/data_drift_module/.gitognore`
-**Fix**: Should be renamed to `.gitignore`
-
-### 2. Current Data in Visualizer
-
-**Issue**: Basic `DriftVisualizer` doesn't store `current_data`, limiting some visualizations
-**Status**: Fixed in `ImprovedDriftVisualizer` which requires it as constructor parameter
-**Usage**: Always use `ImprovedDriftVisualizer(detector, current_data)` with both parameters
-
-### 3. Chi-Square Test Sensitivity
-
-**Issue**: Chi-square test can fail with small sample sizes or rare categories
-**Mitigation**:
-- Code includes try-except blocks to handle failures
-- Sample size warnings in improved version
-- Frequency normalization to ensure valid counts
-
-### 4. PSI Calculation Stability
-
-**Issue**: PSI can produce NaN/Inf with zero-frequency bins
-**Mitigation**:
-- Improved version uses epsilon smoothing (default: 1e-4)
-- Unique breakpoint handling
-- Fallback to 0.0 on calculation errors
-
-### 5. Missing Data Handling
-
-**Issue**: Missing values handled by dropping (`.dropna()`)
-**Impact**: Separate missing value drift detection added in improved version
-**Recommendation**: Check `missing_analysis` field in results
 
 ---
 
@@ -478,35 +266,18 @@ Scripts expect data in `data/` directory (gitignored):
 
 | PSI Value | Interpretation | Action |
 |-----------|---------------|--------|
-| < 0.1 | No significant change | Continue monitoring |
-| 0.1 - 0.2 | Slight change | Investigate |
-| > 0.2 | Significant drift | Consider retraining |
+| < 0.1 | 無顯著變化 | 繼續監控 |
+| 0.1 - 0.2 | 輕微變化 | 調查 |
+| > 0.2 | 顯著漂移 | 考慮重新訓練 |
 
 ### Drift Percentage Interpretation
 
-Based on `quick_start_improved.py` decision logic:
-
 | Drift % | Severity | Actions |
 |---------|----------|---------|
-| < 5% | Stable | Normal monitoring |
-| 5-15% | Light drift | Continuous monitoring, trend logging |
-| 15-30% | Moderate drift | Close monitoring, analyze main features, prepare retraining |
-| ≥ 30% | Severe drift | Immediate action: check data pipeline, analyze causes, evaluate model, retrain |
-
-### Statistical Test Thresholds
-
-**Standard Configuration**:
-- Significance level: 0.05 (p-value threshold)
-- PSI threshold: 0.2
-- JSD threshold: 0.1
-- TVD threshold: 0.2
-- Hellinger threshold: 0.2
-- Missing rate difference: 0.05 (5%)
-
-**Strict Configuration** (for production monitoring):
-- Significance level: 0.01
-- PSI threshold: 0.1
-- Lower thresholds for all distance metrics
+| < 5% | 穩定 | 正常監控 |
+| 5-15% | 輕微漂移 | 持續監控，記錄趨勢 |
+| 15-30% | 中度漂移 | 密切監控，分析主要特徵，準備重新訓練 |
+| ≥ 30% | 嚴重漂移 | 立即行動：檢查資料管道、評估模型、重新訓練 |
 
 ---
 
@@ -514,53 +285,29 @@ Based on `quick_start_improved.py` decision logic:
 
 ### Adding New Statistical Tests
 
-1. Add test function to detector class:
-   ```python
-   def _calculate_new_metric(self, ref_data, curr_data):
-       # Implementation
-       return metric_value
-   ```
+```python
+def _calculate_new_metric(self, ref_data, curr_data):
+    return metric_value
 
-2. Add to appropriate drift detection method:
-   ```python
-   def _detect_numerical_drift(self, ...):
-       # ... existing tests
-       new_metric = self._calculate_new_metric(ref_data, curr_data)
-       if new_metric > threshold:
-           drift_reasons.append('new_metric')
-   ```
-
-3. Add interpretation function:
-   ```python
-   def _interpret_new_metric(self, value):
-       if value < 0.1:
-           return "低風險"
-       # ... more conditions
-   ```
-
-4. Include in test results dictionary
-
-### Adding New Visualizations
-
-1. Add method to visualizer class:
-   ```python
-   def plot_new_visualization(self, feature_name, figsize, save_path):
-       # Create matplotlib figure
-       # Add to ImprovedDriftVisualizer
-   ```
-
-2. Include in `plot_all_drifts()` if applicable
+def _detect_numerical_drift(self, ...):
+    # 在現有測試後加入
+    if self.enable_new_metric:
+        new_value = self._calculate_new_metric(ref_data, curr_data)
+        if new_value > threshold:
+            drift_reasons.append('new_metric')
+        tests['new_metric'] = {'value': float(new_value), 'interpretation': ...}
+```
 
 ### Custom Configuration Profiles
 
-Add to `DriftDetectionConfig` class:
 ```python
 @classmethod
 def get_custom_config(cls) -> dict:
     return {
         'significance_level': 0.03,
         'psi_threshold': 0.15,
-        # ... other parameters
+        'jsd_threshold': 0.08,
+        ...
     }
 ```
 
@@ -570,130 +317,17 @@ def get_custom_config(cls) -> dict:
 
 ### When Modifying Code
 
-1. **Preserve Language Pattern**:
-   - Keep Chinese comments/docstrings
-   - Keep English code/variable names
-   - Maintain existing docstring format
-
-2. **Maintain Compatibility**:
-   - Both basic and improved versions should work independently
-   - Don't break existing quick start scripts
-   - Preserve results dictionary structure
-
-3. **Testing**:
-   - Test with both numerical and categorical features
-   - Verify with small sample sizes
-   - Check edge cases (all same values, many missing values)
-
-4. **Documentation**:
-   - Update this CLAUDE.md for significant changes
-   - Update method docstrings
-   - Update quick start scripts if API changes
+1. **Preserve Language Pattern** — Chinese comments/docstrings, English code
+2. **Maintain Results Structure** — `drift_results` dict 格式不要破壞
+3. **Test Both Feature Types** — 數值型和類別型都要驗證
+4. **Update CLAUDE.md** — 重要變更後更新此文件
 
 ### When Analyzing Drift Results
 
-1. **Check Multiple Indicators**:
-   - Don't rely on single test
-   - PSI is industry standard but check p-values too
-   - Improved version provides drift_reasons list
-
-2. **Consider Context**:
-   - Sample size matters (check sample_check field)
-   - Missing value changes can indicate data quality issues
-   - New/disappeared categories in categorical features
-
-3. **Interpretation Priority**:
-   - PSI > 0.2 with multiple test failures = high confidence drift
-   - Single test failure = investigate further
-   - Small sample warnings = results less reliable
-
-### Common Tasks
-
-#### Adding a New Feature to Track
-
-```python
-# No code change needed - just ensure feature in both datasets
-reference_data['new_feature'] = ...
-current_data['new_feature'] = ...
-# Detector will automatically detect and analyze
-```
-
-#### Adjusting Sensitivity
-
-```python
-# Option 1: Direct configuration
-detector = ImprovedDataDriftDetector(
-    reference_data=ref_data,
-    threshold=0.01,  # More strict
-    psi_threshold=0.15  # More strict
-)
-
-# Option 2: Use config profiles
-config = DriftDetectionConfig.get_strict_config()
-detector = ImprovedDataDriftDetector(
-    reference_data=ref_data,
-    threshold=config['significance_level'],
-    psi_threshold=config['psi_threshold']
-)
-```
-
-#### Generating Custom Reports
-
-```python
-# Access raw results
-results = detector.detect_drift(current_data)
-
-# Build custom analysis
-for feature, result in results['feature_results'].items():
-    if result['has_drift']:
-        # Custom logic here
-        tests = result['tests']
-        stats = result['statistics']
-        # ... analyze as needed
-```
-
----
-
-## Project History and Evolution
-
-Based on commit history:
-1. Initial commit - basic structure
-2. Added .gitignore (with typo)
-3. Multiple fixes to .gitignore patterns
-4. Removed ignored files from repository
-
-**Recent Focus**: Repository cleanup and gitignore configuration
-
----
-
-## Future Enhancement Ideas
-
-Potential improvements not yet implemented:
-
-1. **Automated Monitoring**:
-   - Scheduled drift detection
-   - Alert system integration
-   - Dashboard for continuous monitoring
-
-2. **Additional Tests**:
-   - Cramér's V for categorical associations
-   - Effect size metrics
-   - Multivariate drift detection
-
-3. **Performance Optimization**:
-   - Parallel processing for multiple features
-   - Sampling for very large datasets (partially implemented in config)
-   - Incremental/online drift detection
-
-4. **Better Reporting**:
-   - HTML report generation
-   - Interactive visualizations (Plotly)
-   - Exportable drift dashboards
-
-5. **Integration**:
-   - MLflow integration
-   - Model registry integration
-   - CI/CD pipeline integration
+1. 使用多指標綜合判斷（不要依賴單一指標）
+2. PSI > 0.2 且多個檢定失敗 = 高信心漂移
+3. 小樣本警告時結果可靠性較低（檢查 `sample_check`）
+4. 注意 `missing_analysis` 是否有資料品質問題
 
 ---
 
@@ -702,59 +336,37 @@ Potential improvements not yet implemented:
 ### Import Statements
 
 ```python
-# Basic version
-from dependencies import DataDriftDetector, DriftVisualizer
-
-# Improved version
-from files.improved_data_drift_detector import ImprovedDataDriftDetector
-from files.improved_drift_visualizer import ImprovedDriftVisualizer
-from files.drift_config import DriftDetectionConfig, ConfigSelector
+from data_drift_module import DataDriftDetector, DriftVisualizer
+from data_drift_module.config import DriftDetectionConfig, ConfigSelector
 ```
 
 ### Minimal Working Example
 
 ```python
 import pandas as pd
-from improved_data_drift_detector import ImprovedDataDriftDetector
+from data_drift_module import DataDriftDetector
 
-# Load data
 ref = pd.read_csv('reference.csv')
 curr = pd.read_csv('current.csv')
 
-# Detect
-detector = ImprovedDataDriftDetector(ref)
+detector = DataDriftDetector(ref)
 results = detector.detect_drift(curr)
 
-# Report
 print(f"Drift detected in {results['summary']['drifted_features']} features")
 print(detector.generate_report())
 ```
 
 ### File to Use For Each Task
 
-| Task | File to Use |
-|------|-------------|
-| Basic drift detection | `dependencies/data_drift_detector.py` |
-| Comprehensive detection | `files/improved_data_drift_detector.py` |
-| Basic visualization | `dependencies/drift_visualizer.py` |
-| Advanced visualization | `files/improved_drift_visualizer.py` |
-| Configuration | `files/drift_config.py` |
-| Quick start / learning | `files/quick_start_simple.py` |
-| Production pipeline | `files/quick_start_improved.py` |
+| Task | File |
+|------|------|
+| 漂移偵測 | `data_drift_module/detector.py` |
+| 視覺化 | `data_drift_module/visualizer.py` |
+| 配置管理 | `data_drift_module/config.py` |
+| 快速入門 | `examples/quick_start.py` |
+| Jupyter 範例 | `examples/notebooks/` |
 
 ---
 
-## Contact and Contribution
-
-This is a self-contained project for data drift detection. When contributing:
-
-1. Follow existing code style and language patterns
-2. Test with both basic and improved versions
-3. Update this CLAUDE.md for significant changes
-4. Add examples to quick start scripts when adding features
-5. Fix the .gitignore filename typo if touching that area
-
----
-
-**Last Updated**: 2025-12-09
-**Version**: Based on commit 02a6eb3
+**Last Updated**: 2026-04-24
+**Version**: 1.0.0
